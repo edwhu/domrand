@@ -1,21 +1,42 @@
 # Reproducing Domain Randomization for Sim-to-Real
 Reproducing [[Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World]](https://arxiv.org/abs/1703.06907)
 
+# Stuff Edward Added / Changed
+- Added `active_perception.py` file that contains mujoco logic for generating sequences of images with static object and multiple viewpoints
+- Added `collect_sequence.py` file for generating the dataset.
+- Changed `utils/data.py` file for generating the dataset.
+
+The dataset has the following structure.
+
+Each episode directory has K images. In each episode, there is a pickle file
+containing camera intrinsics, object world pose, robot world pose, and K length sequence of camera pose.
+
+If we need a reference object, we can use the robot. I have 3 main cameras, front, side, and overhead that I sample from. I add a small amount of angle and position offset as well. The fovy of the camera is 60.
+
+Cam, Object, Robot pose are <x, y, z, qw, qx, qy, qz>, position and quat
+```
+Data/
+    ep_1/
+        ep_data.pkl
+        0.png
+        1.png
+        k.png
+```
 
 ## Intro
 
 This repository contains my implementation of domain randomization setup
-for training an object localization model in simulation to adapt to the real 
+for training an object localization model in simulation to adapt to the real
 world.  I was implementing this as part of a larger research project, and decided
 to publish this in case others may find it useful.
 
-I use the KUKA LBR4 arm ([video](https://youtu.be/wu7q5IZRJTA)) instead of the Fetch 
-robot that was used in OpenAI's initial domain randomization work.  
+I use the KUKA LBR4 arm ([video](https://youtu.be/wu7q5IZRJTA)) instead of the Fetch
+robot that was used in OpenAI's initial domain randomization work.
 
 I show that I am able to get average 3.7cm accuracy in the real world
 with a model trained purely in simulation.  I suspect I could improve
-this accuracy to be on par with the 1.5cm reported in the original paper, 
-by doing better calibration to the real world and randomizing some more relevant 
+this accuracy to be on par with the 1.5cm reported in the original paper,
+by doing better calibration to the real world and randomizing some more relevant
 aspects of the visuals.  But I figured the results are good enough for purposes
 of showing it works, and 3.7cm is still quite good for the bigger table
 (with large range of positions) I was using.
@@ -64,12 +85,12 @@ fixed height, so Z is always the same, as in the paper).
 
 To evaluate my system, I collected [54 images](./data/real) from the real world
 with a cube placed in uniformly spaced positions on a table in front of the
-robot arm.  I run the model trained in simulation on each of these images, 
-and achieve an average error of 3.7cm.  I show examples from various 
-percentiles with 100 being the best prediction (under 1 cm error) and 0 
-being the worst prediction (45 cm error).  Note that the worst results come from 
-the object being on the edge of the table, and that despite a few outliers, 
-the model is pretty accuracte.  
+robot arm.  I run the model trained in simulation on each of these images,
+and achieve an average error of 3.7cm.  I show examples from various
+percentiles with 100 being the best prediction (under 1 cm error) and 0
+being the worst prediction (45 cm error).  Note that the worst results come from
+the object being on the edge of the table, and that despite a few outliers,
+the model is pretty accuracte.
 
 NOTE: that I only use the XY coordinates in calculating error, since the height
 is always the same. This provides a more fair estimation of model accuracy.
@@ -93,8 +114,8 @@ Follow the instructions at the [mujoco\_py](https://github.com/openai/mujoco-py)
 repo.  Installation can be a pain, and see the tips [below](#mujoco) for some GitHub
 issues to check out if you have any problems with installation.
 
-You may have to install some extra packages (see my [`apt.txt`](./apt.txt) for 
-a (partial) list of these).  
+You may have to install some extra packages (see my [`apt.txt`](./apt.txt) for
+a (partial) list of these).
 
 
 To install the python dependencies:
@@ -128,13 +149,13 @@ python3 run_domrand.py
 
 python3 run_domrand.py --gui 1  # to visualize results, but not write to file
 
-# And you can just kill it when you are done. 
-# My code handles file closing for imcomplete writes, but can sometimes cause data corruptoins. 
+# And you can just kill it when you are done.
+# My code handles file closing for imcomplete writes, but can sometimes cause data corruptoins.
 # To be safe, after running the script, you can run:
 
 python3 scripts/find_corruption.py
 ```
-I generally generate and test with about 100 files (100k images) for good 
+I generally generate and test with about 100 files (100k images) for good
 measure, but I have not done a thorough test of how many are really required
 for good performance.  I suspect 50k images would give similar results and that
 you could likely get away with 20k.
@@ -166,7 +187,7 @@ is to log into the `checkpoint` folder.  See [`sim2real/define_flags.py`](./sim2
 
 ```
   <visual>
-    <map znear=0.01 /> 
+    <map znear=0.01 />
   </visual>
 ```
 

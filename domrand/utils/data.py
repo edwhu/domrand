@@ -1,14 +1,20 @@
-import yaml
-import time
 import os
-from tqdm import trange
-import tensorflow as tf
-import numpy as np
-from tensorflow.python.lib.io.tf_record import TFRecordOptions, TFRecordCompressionType, TFRecordWriter
+import pickle
+import time
+
+import imageio
 import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+import yaml
+from domrand.utils.constants import (GRID_SPACING, OBJ_DZ, TABLE_GRID_OFFX,
+                                     TABLE_GRID_OFFY, TABLE_WX, TABLE_WY,
+                                     TBE_TF, TBS_TF)
 from domrand.utils.image import preproc_image
-from domrand.utils.constants import OBJ_DZ, TABLE_GRID_OFFX, TABLE_GRID_OFFY,  \
-    GRID_SPACING, TABLE_WX, TABLE_WY, TBS_TF, TBE_TF
+from tensorflow.python.lib.io.tf_record import (TFRecordCompressionType,
+                                                TFRecordOptions,
+                                                TFRecordWriter)
+from tqdm import trange
 
 """
 Data pipeline utils
@@ -19,8 +25,79 @@ def _int64_feature(value):
 def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
+def write_sequence_data(sim_manager, data_path):
+    """
+    Create dataset with the following structure.
+
+    Each episode directory has K images. In each episode, there is a pickle file
+    containing camera intrinsics, object world pose, robot world pose, and K length
+    sequence of camera pose
+    Cam, Object, Robot pose are <x, y, z, qw, qx, qy, qz>, position and quat
+    Data/
+        ep_1/
+            ep_data.pkl
+            0.img
+            1.img
+            k.img
+    """
+    # make /data/sim folder
+    os.makedirs(data_path, exist_ok=True)
+    for i in trange(int(1e1), desc="Generating episodes"):
+        foldername = f"ep_{i}"
+        ep_folder = os.path.join(data_path, foldername)
+        os.makedirs(ep_folder, exist_ok=True)
+        context, sequence = sim_manager.get_data()
+        # write images to folder
+        for j, img in enumerate(sequence["img"]):
+            img_path = os.path.join(ep_folder, f"{j}.png")
+            imageio.imwrite(img_path, img)
+        # store context and camera pose sequence to pickle file
+        pickle_path = os.path.join(ep_folder, "ep_data.pkl")
+        with open(pickle_path, "wb") as f:
+            context["cam_pose"] = sequence["cam_pose"]
+            pickle.dump(context, f)
+
+
 def write_data(sim_manager, data_path):
     """Make some domrand data and save it to tfrecords."""
+    image, label = sim_manager.get_data()
+
+    rows = image.shape[0]
+    cols = image.shape[1]
+    depth = image.shape[2]
+
+    # OUTER = 5e2
+    # INNER = 1e3
+    # generate 1e5 examples, spread across 1e2 files
+    print()
+    print('Generating 1e5 examples (~30 GB). You can ctrl-c anytime you want')
+    print()
+    for i in trange(int(1e2), desc='Files created'):
+        date_string = time.strftime('%Y-%m-%d-%H-%M-%S')
+        filename = os.path.join(data_path, date_string + '.tfrecords')
+        with TFRecordWriter(filename, options=TFRecordOptions(TFRecordCompressionType.GZIP)) as writer:
+            try:
+                for j in trange(int(1e3), desc='Examples generated'):
+                    image, label = sim_manager.get_data()
+                    assert image.dtype == np.uint8
+                    image_raw = image.tostring()
+                    label_raw = label.astype(np.float32).tostring()
+
+                    example = tf.train.Example(
+                        features=tf.train.Features(
+                            feature={
+                                'label_raw': _bytes_feature(label_raw),
+                                'image_raw': _bytes_feature(image_raw)
+                            }))
+                    writer.write(example.SerializeToString())
+            except:
+                writer.close()
+                os.remove(filename)
+
+    writer.close()
+
+def write_seq_data(sim_manager, data_path):
+    """Make some sequential data and save it to tfrecords."""
     image, label = sim_manager.get_data()
 
     rows = image.shape[0]
@@ -81,7 +158,7 @@ def bin_label(image, label):
     with tf.control_dependencies([assert_op]):
         frac = tf.clip_by_value(frac, 0, 0.99999) # never want it to be 1
         binned_label = tf.cast(frac * FLAGS.coarse_bin, tf.int32)
-    return image, binned_label 
+    return image, binned_label
 
 def brighten_image(image, label):
     """Add random brightness to image to better match the distribution"""
@@ -90,7 +167,7 @@ def brighten_image(image, label):
     image = tf.image.adjust_brightness(image, delta)
 
     if FLAGS.random_noise:
-        noise = tf.random_normal(shape=tf.shape(image), mean=0.0, stddev=FLAGS.noise_std, dtype=tf.float32)  
+        noise = tf.random_normal(shape=tf.shape(image), mean=0.0, stddev=FLAGS.noise_std, dtype=tf.float32)
         image = image + noise
 
     image = tf.clip_by_value(image, -1.0, 1.0)
@@ -110,7 +187,7 @@ def load_eval_data(eval_data_path, data_shape='asus'):
     imgs = []
     labels = []
     files = sorted(os.listdir(eval_data_path))
-    for f in files: 
+    for f in files:
         if not f.endswith('.jpg'):
             continue
 
@@ -120,7 +197,7 @@ def load_eval_data(eval_data_path, data_shape='asus'):
         dy = TABLE_GRID_OFFY - y*GRID_SPACING
         dz = OBJ_DZ
         dobj = np.array([dx, dy, dz])
-        
+
         filename = os.path.join(eval_data_path, f)
         img = plt.imread(filename)
         if data_shape == 'asus':

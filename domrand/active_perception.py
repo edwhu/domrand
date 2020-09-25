@@ -1,28 +1,32 @@
+import math
+import os
+import time
+from collections import defaultdict
+
+import mujoco_py
 import numpy as np
 import quaternion
 import skimage
-import time
-import os
 import yaml
-
-
-import mujoco_py
-from mujoco_py import load_model_from_path, MjSim, MjViewer , functions
-from mujoco_py.modder import BaseModder, CameraModder, LightModder, MaterialModder
+from mujoco_py import MjSim, MjViewer, functions, load_model_from_path
+from mujoco_py.modder import (BaseModder, CameraModder, LightModder,
+                              MaterialModder)
 
 from domrand.define_flags import FLAGS
-from domrand.utils.image import display_image, preproc_image
 from domrand.utils.data import get_real_cam_pos
+from domrand.utils.image import display_image, preproc_image
 from domrand.utils.modder import TextureModder
-from domrand.utils.sim import look_at
-from domrand.utils.sim import Range, Range3D, rto3d # object type things
-from domrand.utils.sim import sample, sample_xyz, sample_joints, sample_light_dir, sample_quat, sample_geom_type, random_quat, jitter_quat, jitter_angle
+from domrand.utils.sim import (Range, Range3D,  # object type things
+                               jitter_angle, jitter_quat, look_at, random_quat,
+                               rto3d, sample, sample_geom_type, sample_joints,
+                               sample_light_dir, sample_quat, sample_xyz)
+
 
 # GLOSSARY:
 # gid = geom_id
 # bid = body_id
 class SimManager(object):
-    """Object to handle randomization of all relevant properties of Mujoco sim"""
+    """Object to generate sequence of images with their transforms"""
     def __init__(self, filepath, random_params={}, gpu_render=False, gui=False, display_data=False):
         self.model = load_model_from_path(filepath)
         self.sim = MjSim(self.model)
@@ -52,12 +56,40 @@ class SimManager(object):
         self.cam_modder = CameraModder(self.sim)
         self.light_modder = LightModder(self.sim)
 
-    def get_data(self):
-        self._randomize()
-        self._forward()
-        gt = self._get_ground_truth()
-        cam = self._get_cam_frame(gt)
-        return cam, gt
+    def get_data(self, num_images=6):
+        """
+        Returns camera intrinsics, and a sequence of images, pose transforms, and
+        camera transforms
+        """
+        # randomize the scene
+        self._rand_textures()
+        self._rand_lights()
+        self._rand_object()
+        self._rand_walls()
+        self._rand_distract()
+        sequence = defaultdict(list)
+        context = {}
+        # object pose
+        obj_pose, robot_pose = self._get_ground_truth()
+        context["obj_world_pose"] = obj_pose
+        context["robot_world_pose"] = robot_pose
+        for i in range(num_images):
+             self._rand_camera()
+             self._forward()
+             img = self._get_cam_frame()
+             sequence["img"].append(img)
+             cam_pos = self.cam_modder.get_pos("camera1")
+             cam_quat = self.cam_modder.get_quat("camera1")
+             cam_pose = np.concatenate([cam_pos, cam_quat]).astype(np.float32)
+             sequence["cam_pose"].append(cam_pose)
+
+        cam_id = self.cam_modder.get_camid("camera1")
+        fovy = self.sim.model.cam_fovy[cam_id]
+        width, height = 640, 480
+        f = 0.5 * height / math.tan(fovy * math.pi / 360)
+        camera_intrinsics =  np.array(((f, 0, width / 2), (0, f, height / 2), (0, 0, 1)))
+        context['cam_matrix'] = camera_intrinsics
+        return context, sequence
 
     def _forward(self):
         """Advances simulator a step (NECESSARY TO MAKE CAMERA AND LIGHT MODDING WORK)
@@ -76,11 +108,28 @@ class SimManager(object):
             self.viewer.render()
 
     def _get_ground_truth(self):
+        """
+        Return the  position to the robot, and quaternion to the robot quaternion
+        7 dim total
+        """
         robot_gid = self.sim.model.geom_name2id('base_link')
         obj_gid = self.sim.model.geom_name2id('object')
+        # only x and y pos needed
+        obj_world_pos = self.sim.data.geom_xpos[obj_gid]
+        robot_world_pos = self.sim.data.geom_xpos[robot_gid]
+        # obj_pos_in_robot_frame = (self.sim.data.geom_xpos[obj_gid] - self.sim.data.geom_xpos[robot_gid])[:2]
 
-        obj_pos_in_robot_frame = self.sim.data.geom_xpos[obj_gid] - self.sim.data.geom_xpos[robot_gid]
-        return obj_pos_in_robot_frame.astype(np.float32)
+        # robot_quat = quaternion.as_quat_array(self.model.geom_quat[robot_gid].copy())
+        obj_world_quat = self.model.geom_quat[obj_gid].copy()
+        robot_world_quat = self.model.geom_quat[robot_gid].copy()
+        # # want quat of obj relative to robot frame
+        # # obj_q = robot_q * localrot
+        # # robot_q.inv * obj_q = localrot
+        # rel_quat = quaternion.as_float_array(robot_quat.inverse() * obj_quat)
+        # pose = np.concatenate([obj_pos_in_robot_frame, rel_quat]).astype(np.float32)
+        obj_pose = np.concatenate([obj_world_pos, obj_world_quat]).astype(np.float32)
+        robot_pose = np.concatenate([robot_world_pos, robot_world_quat]).astype(np.float32)
+        return obj_pose, robot_pose
 
     def _get_cam_frame(self, ground_truth=None):
         """Grab an image from the camera (224, 244, 3) to feed into CNN"""
@@ -119,7 +168,7 @@ class SimManager(object):
 
     def _rand_camera(self):
         """Randomize pos, orientation, and fov of camera
-
+        real camera pos is -1.75, 0, 1.62
         FOVY:
         Kinect2 is 53.8
         ASUS is 45
@@ -135,11 +184,13 @@ class SimManager(object):
         #cam_pos = sample_xyz(C_R3D)
         #L_R3D = rto3d([-0.1, 0.1])
 
-        C_R3D = Range3D([-0.05,0.05], [-0.05,0.05], [-0.05,0.05])
+        C_R3D = Range3D([-0.07,0.07], [-0.07,0.07], [-0.07,0.07])
         ANG3 = Range3D([-3,3], [-3,3], [-3,3])
 
         # Look approximately at the robot, but then randomize the orientation around that
-        cam_pos = get_real_cam_pos(FLAGS.real_data_path)
+        cam_choices = np.array([[-1.75, 0, 1.62], [-1.3, 1.7, 1.62], [-1.75, 0, 2]])
+        cam_pos = cam_choices[np.random.choice(len(cam_choices))]
+        # cam_pos = get_real_cam_pos(FLAGS.real_data_path)
         target_id = self.model.body_name2id(FLAGS.look_at)
 
         cam_off = 0 #sample_xyz(L_R3D)
@@ -152,7 +203,7 @@ class SimManager(object):
 
         self.cam_modder.set_quat('camera1', quat)
         self.cam_modder.set_pos('camera1', cam_pos)
-        self.cam_modder.set_fovy('camera1', sample(FOVY_R))
+        self.cam_modder.set_fovy('camera1', 60) # hard code to wide fovy
 
     def _rand_lights(self):
         """Randomize pos, direction, and lights"""
@@ -213,7 +264,7 @@ class SimManager(object):
         O_Z = Range(0, 0)
         O_R3D = Range3D(O_X, O_Y, O_Z)
         self.model.geom_pos[obj_gid] = self.START_GEOM_POS[obj_gid] + sample_xyz(O_R3D)
-        #self.model.geom_quat[obj_gid] = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
+        self.model.geom_quat[obj_gid] = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
 
         #T_X = Range(-0.1, 0.1)
         #T_Y = Range(-0.1, 0.1)
