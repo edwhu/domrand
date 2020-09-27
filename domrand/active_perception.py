@@ -56,7 +56,7 @@ class SimManager(object):
         self.cam_modder = CameraModder(self.sim)
         self.light_modder = LightModder(self.sim)
 
-    def get_data(self, num_images=6):
+    def get_data(self, num_images=10):
         """
         Returns camera intrinsics, and a sequence of images, pose transforms, and
         camera transforms
@@ -73,8 +73,11 @@ class SimManager(object):
         obj_pose, robot_pose = self._get_ground_truth()
         context["obj_world_pose"] = obj_pose
         context["robot_world_pose"] = robot_pose
+        self._cam_step = 0
+        self._cam_choices = np.array([[-1.75, 0, 2], [-1.75, 0, 1.62], [-1.3, 1.7, 1.62]])
+        self._curr_cam_pos = self._cam_choices[0]
         for i in range(num_images):
-             self._rand_camera()
+             self._next_camera()
              self._forward()
              img = self._get_cam_frame()
              sequence["img"].append(img)
@@ -146,7 +149,7 @@ class SimManager(object):
             #label = str(ground_truth[3:6])
             display_image(cam_img, mode='preproc')#, label)
 
-        cam_img = preproc_image(cam_img)
+        # cam_img = preproc_image(cam_img)
         return cam_img
 
     def _randomize(self):
@@ -190,6 +193,54 @@ class SimManager(object):
         # Look approximately at the robot, but then randomize the orientation around that
         cam_choices = np.array([[-1.75, 0, 1.62], [-1.3, 1.7, 1.62], [-1.75, 0, 2]])
         cam_pos = cam_choices[np.random.choice(len(cam_choices))]
+        # cam_pos = get_real_cam_pos(FLAGS.real_data_path)
+        target_id = self.model.body_name2id(FLAGS.look_at)
+
+        cam_off = 0 #sample_xyz(L_R3D)
+        target_off = 0 #sample_xyz(L_R3D)
+        quat = look_at(cam_pos+cam_off, self.sim.data.body_xpos[target_id]+target_off)
+        quat = jitter_angle(quat, ANG3)
+        #quat = jitter_quat(quat, 0.01)
+
+        cam_pos += sample_xyz(C_R3D)
+
+        self.cam_modder.set_quat('camera1', quat)
+        self.cam_modder.set_pos('camera1', cam_pos)
+        self.cam_modder.set_fovy('camera1', 60) # hard code to wide fovy
+
+    def _next_camera(self):
+        """Randomize pos, orientation, and fov of camera
+        real camera pos is -1.75, 0, 1.62
+        FOVY:
+        Kinect2 is 53.8
+        ASUS is 45
+        https://www.asus.com/us/3D-Sensor/Xtion_PRO_LIVE/specifications/
+        http://smeenk.com/kinect-field-of-view-comparison/
+        """
+        # Params
+        FOVY_R = Range(40, 50)
+        #X = Range(-3, -1)
+        #Y = Range(-1, 3)
+        #Z = Range(1, 2)
+        #C_R3D = Range3D(X, Y, Z)
+        #cam_pos = sample_xyz(C_R3D)
+        #L_R3D = rto3d([-0.1, 0.1])
+
+        C_R3D = Range3D([-0.07,0.07], [-0.07,0.07], [-0.07,0.07])
+        ANG3 = Range3D([-3,3], [-3,3], [-3,3])
+
+        # Look approximately at the robot, but then randomize the orientation around that
+
+        # linearly interpolate to the next camera every K steps
+        K = 5
+        goal_cam_pos = self._cam_choices[(self._cam_step // K) + 1]
+        offset = goal_cam_pos - self._curr_cam_pos
+        offset *= (self._cam_step % K) / K
+        self._curr_cam_pos += offset
+        cam_pos = self._curr_cam_pos
+        self._cam_step += 1
+
+        # cam_pos = cam_choices[np.random.choice(len(cam_choices))]
         # cam_pos = get_real_cam_pos(FLAGS.real_data_path)
         target_id = self.model.body_name2id(FLAGS.look_at)
 

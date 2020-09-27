@@ -66,18 +66,17 @@ def write_data(sim_manager, data_path):
     cols = image.shape[1]
     depth = image.shape[2]
 
-    # OUTER = 5e2
-    # INNER = 1e3
-    # generate 1e5 examples, spread across 1e2 files
+    OUTER = 5e2
+    INNER = 1e3
     print()
-    print('Generating 1e5 examples (~30 GB). You can ctrl-c anytime you want')
+    print('Generating 5e5 examples (~150 GB). You can ctrl-c anytime you want')
     print()
-    for i in trange(int(1e2), desc='Files created'):
+    for i in trange(int(OUTER), desc='Files created'):
         date_string = time.strftime('%Y-%m-%d-%H-%M-%S')
         filename = os.path.join(data_path, date_string + '.tfrecords')
         with TFRecordWriter(filename, options=TFRecordOptions(TFRecordCompressionType.GZIP)) as writer:
             try:
-                for j in trange(int(1e3), desc='Examples generated'):
+                for j in trange(int(INNER), desc='Examples generated'):
                     image, label = sim_manager.get_data()
                     assert image.dtype == np.uint8
                     image_raw = image.tostring()

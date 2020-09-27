@@ -75,12 +75,28 @@ class SimManager(object):
             self.viewer.add_marker(pos=cam_pos, label="FOVY: {}, CAM: {}".format(cam_fovy, cam_pos))
             self.viewer.render()
 
-    def _get_ground_truth(self):
-        robot_gid = self.sim.model.geom_name2id('base_link')
-        obj_gid = self.sim.model.geom_name2id('object')
+    # def _get_ground_truth(self):
+    #     robot_gid = self.sim.model.geom_name2id('base_link')
+    #     obj_gid = self.sim.model.geom_name2id('object')
 
-        obj_pos_in_robot_frame = self.sim.data.geom_xpos[obj_gid] - self.sim.data.geom_xpos[robot_gid]
-        return obj_pos_in_robot_frame.astype(np.float32)
+    #     obj_pos_in_robot_frame = self.sim.data.geom_xpos[obj_gid] - self.sim.data.geom_xpos[robot_gid]
+    #     return obj_pos_in_robot_frame.astype(np.float32)
+
+    def _get_ground_truth(self):
+        """
+        Return x, y, and z rotation
+        3 dim total
+        """
+        obj_gid = self.sim.model.geom_name2id('object')
+        # only x and y pos needed
+        obj_world_pos = self.sim.data.geom_xpos[obj_gid]
+        obj_world_quat = quaternion.as_quat_array(self.model.geom_quat[obj_gid].copy())
+        zrot = quaternion.as_rotation_vector(obj_world_quat)[-1]
+        pose = np.zeros((3,))
+        pose[:2] = obj_world_pos[:2]
+        pose[2] = zrot
+        return pose
+
 
     def _get_cam_frame(self, ground_truth=None):
         """Grab an image from the camera (224, 244, 3) to feed into CNN"""
@@ -127,15 +143,15 @@ class SimManager(object):
         http://smeenk.com/kinect-field-of-view-comparison/
         """
         # Params
-        FOVY_R = Range(40, 50)
-        #X = Range(-3, -1)
-        #Y = Range(-1, 3)
-        #Z = Range(1, 2)
-        #C_R3D = Range3D(X, Y, Z)
-        #cam_pos = sample_xyz(C_R3D)
+        # FOVY_R = Range(40, 50)
+        X = Range(-3, -1)
+        Y = Range(-1, 3)
+        Z = Range(1.5, 2.3)
+        C_R3D = Range3D(X, Y, Z)
+        cam_pos = sample_xyz(C_R3D)
         #L_R3D = rto3d([-0.1, 0.1])
 
-        C_R3D = Range3D([-0.05,0.05], [-0.05,0.05], [-0.05,0.05])
+        C_R3D = Range3D([-0.07,0.07], [-0.07,0.07], [-0.07,0.07])
         ANG3 = Range3D([-3,3], [-3,3], [-3,3])
 
         # Look approximately at the robot, but then randomize the orientation around that
@@ -152,7 +168,7 @@ class SimManager(object):
 
         self.cam_modder.set_quat('camera1', quat)
         self.cam_modder.set_pos('camera1', cam_pos)
-        self.cam_modder.set_fovy('camera1', sample(FOVY_R))
+        self.cam_modder.set_fovy('camera1', 60)
 
     def _rand_lights(self):
         """Randomize pos, direction, and lights"""
@@ -213,7 +229,7 @@ class SimManager(object):
         O_Z = Range(0, 0)
         O_R3D = Range3D(O_X, O_Y, O_Z)
         self.model.geom_pos[obj_gid] = self.START_GEOM_POS[obj_gid] + sample_xyz(O_R3D)
-        #self.model.geom_quat[obj_gid] = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
+        self.model.geom_quat[obj_gid] = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
 
         #T_X = Range(-0.1, 0.1)
         #T_Y = Range(-0.1, 0.1)
