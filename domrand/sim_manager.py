@@ -34,7 +34,7 @@ class SimManager(object):
         self.RANDOM_PARAMS.update(random_params)
 
         if gpu_render:
-            self.viewer = MjViewer(self.sim)
+            self.viewer = mujoco_py.MjRenderContextOffscreen(self.sim, device_id=-1)
         else:
             self.viewer = None
 
