@@ -139,27 +139,27 @@ def train_simple():
                 train_images, train_preds, train_labels, summary = sess.run([d_rebuilt_image, model.preds, d_label, train_summaries], feed_dict={model.lr_ph: lr})
                 train_writer.add_summary(summary, global_step=epoch*len(FLAGS.filenames))
 
-                # Eval summary
-                sess.run(eval_iter_op, feed_dict={eval_img_ph: file_eval_imgs, eval_label_ph: file_eval_labels}) # swap to eval dataset
-                eval_loss, eval_euc, eval_images, eval_preds, eval_labels, eval_summary = sess.run([model.loss, model.euc, d_rebuilt_image, model.preds, d_label, train_summaries])
-                eval_writer.add_summary(eval_summary, global_step=epoch*len(FLAGS.filenames))
+                # # Eval summary
+                # sess.run(eval_iter_op, feed_dict={eval_img_ph: file_eval_imgs, eval_label_ph: file_eval_labels}) # swap to eval dataset
+                # eval_loss, eval_euc, eval_images, eval_preds, eval_labels, eval_summary = sess.run([model.loss, model.euc, d_rebuilt_image, model.preds, d_label, train_summaries])
+                # eval_writer.add_summary(eval_summary, global_step=epoch*len(FLAGS.filenames))
 
                 # make sure we are still improving
-                if eval_euc > best_eval_euc:
-                    early_stop_counter += 1
-                else:
-                    early_stop_counter = 0
-                    best_eval_euc = eval_euc
+                # if eval_euc > best_eval_euc:
+                #     early_stop_counter += 1
+                # else:
+                #     early_stop_counter = 0
+                #     best_eval_euc = eval_euc
 
                 if FLAGS.plot_preds:
                     # takes about 2s
                     # EVAL VIZ
-                    zipped = list(zip(eval_images, eval_preds, eval_labels))
-                    #idxs = np.linspace(0,50,50).astype(int)
-                    #zipped = [zipped[idx] for idx in idxs]
-                    eval_plots = np.array([make_pred_plot(img, pred, label, mode=FLAGS.output) for (img, pred, label) in zipped])
-                    plot_summary = sess.run([viz_eval_summary], {pred_plot_ph:eval_plots})[0]
-                    eval_writer.add_summary(plot_summary, global_step=epoch*len(FLAGS.filenames))
+                    # zipped = list(zip(eval_images, eval_preds, eval_labels))
+                    # #idxs = np.linspace(0,50,50).astype(int)
+                    # #zipped = [zipped[idx] for idx in idxs]
+                    # eval_plots = np.array([make_pred_plot(img, pred, label, mode=FLAGS.output) for (img, pred, label) in zipped])
+                    # plot_summary = sess.run([viz_eval_summary], {pred_plot_ph:eval_plots})[0]
+                    # eval_writer.add_summary(plot_summary, global_step=epoch*len(FLAGS.filenames))
                     # TRAIN VIZ
                     zipped = list(zip(train_images[:3], train_preds[:3], train_labels[:3]))
                     eval_plots = np.array([make_pred_plot(img, pred, label, mode=FLAGS.output) for (img, pred, label) in zipped])
@@ -168,7 +168,7 @@ def train_simple():
 
                 train_loss = np.mean(losses); losses = []
                 train_euc = np.mean(eucs); eucs = []
-                log_string = 'epoch {}: train_loss = {:0.3f} eval_loss = {:0.3f} train_euc = {:0.3f} eval_euc = {:0.3f}'.format(epoch, train_loss, eval_loss, train_euc, eval_euc); print(log_string)
+                log_string = 'epoch {}: train_loss = {:0.3f} train_euc = {:0.3f}'.format(epoch, train_loss, train_euc); print(log_string)
 
                 if FLAGS.more_notify:
                     notify(log_string)
@@ -187,6 +187,6 @@ def train_simple():
                 print('Saved to {}'.format(savepath))
                 saver.save(sess, savepath, global_step=epoch)
                 if FLAGS.num_epochs is not None and epoch > FLAGS.num_epochs:
-                    return dict(train_euc=train_euc, eval_euc=best_eval_euc)
+                    return dict(train_euc=train_euc)
                 elif early_stop_counter >= 4:
-                    return dict(train_euc=train_euc, eval_euc=best_eval_euc)
+                    return dict(train_euc=train_euc)

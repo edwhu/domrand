@@ -10,13 +10,13 @@ def main():
     print(FLAGS.checkpoint)
     results = train_simple()
 
-    logpath = os.path.join(FLAGS.logpath, '{:0.5f}.txt'.format(results['eval_euc']))
+    logpath = os.path.join(FLAGS.logpath, '{:0.5f}.txt'.format(results['train_euc']))
 
     with open(logpath, 'w+') as f:
         f.write(FLAGS.checkpoint)
-    
+
     if FLAGS.notify:
-        notify('Finished run. train: {} eval: {}'.format(results['train_euc'], results['eval_euc']))
+        notify('Finished run. train: {}'.format(results['train_euc'])
 
 
 if __name__ == '__main__':
