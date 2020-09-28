@@ -16,7 +16,7 @@ def main():
         f.write(FLAGS.checkpoint)
 
     if FLAGS.notify:
-        notify('Finished run. train: {}'.format(results['train_euc'])
+        notify('Finished run. train: {}'.format(results['train_euc']))
 
 
 if __name__ == '__main__':
