@@ -238,9 +238,9 @@ class SimManager(object):
         O_R3D = Range3D(O_X, O_Y, O_Z)
 
         newpos = obj_pose[:3] + sample_xyz(O_R3D)
-        # newquat = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
+        newquat = jitter_quat(obj_pose[3:], 0.1)
         obj_pose[:3] = newpos
-        # obj_pose[3:] = newquat
+        obj_pose[3:] = newquat
         self.sim.data.set_joint_qpos('object:joint', obj_pose)
         #T_X = Range(-0.1, 0.1)
         #T_Y = Range(-0.1, 0.1)
