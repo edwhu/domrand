@@ -35,6 +35,7 @@ class SimManager(object):
 
         if gpu_render:
             self.viewer = mujoco_py.MjRenderContextOffscreen(self.sim, device_id=-1)
+            # self.viewer = MjViewer(self.sim)
         else:
             self.viewer = None
 
@@ -51,6 +52,7 @@ class SimManager(object):
         self.tex_modder.whiten_materials()  # ensures materials won't impact colors
         self.cam_modder = CameraModder(self.sim)
         self.light_modder = LightModder(self.sim)
+        self.start_obj_pose = self.sim.data.get_joint_qpos('object:joint').copy()
 
     def get_data(self):
         self._randomize()
@@ -88,13 +90,18 @@ class SimManager(object):
         3 dim total
         """
         obj_gid = self.sim.model.geom_name2id('object')
+        obj_bid = self.sim.model.geom_name2id('object')
         # only x and y pos needed
-        obj_world_pos = self.sim.data.geom_xpos[obj_gid]
-        obj_world_quat = quaternion.as_quat_array(self.model.geom_quat[obj_gid].copy())
+        # obj_world_pos = self.sim.model.geom_pos[obj_gid]
+        # obj_world_quat = quaternion.as_quat_array(self.sim.model.geom_quat[obj_gid].copy())
+        obj_world_pose = self.sim.data.get_joint_qpos('object:joint')
+        obj_world_pos = obj_world_pose[:3]
+        obj_world_quat = quaternion.as_quat_array(obj_world_pose[3:])
         zrot = quaternion.as_rotation_vector(obj_world_quat)[-1]
         pose = np.zeros((3,))
         pose[:2] = obj_world_pos[:2]
         pose[2] = zrot
+        print(pose)
         return pose
 
 
@@ -144,18 +151,18 @@ class SimManager(object):
         """
         # Params
         # FOVY_R = Range(40, 50)
-        X = Range(-3, -1)
-        Y = Range(-1, 3)
-        Z = Range(1.5, 2.3)
+        X = Range(-2, -1)
+        Y = Range(-0.1, 2)
+        Z = Range(1.5, 2.1)
         C_R3D = Range3D(X, Y, Z)
-        cam_pos = sample_xyz(C_R3D)
+        cam_pos = np.array(sample_xyz(C_R3D))
         #L_R3D = rto3d([-0.1, 0.1])
 
-        C_R3D = Range3D([-0.07,0.07], [-0.07,0.07], [-0.07,0.07])
+        # C_R3D = Range3D([-0.07,0.07], [-0.07,0.07], [-0.07,0.07])
         ANG3 = Range3D([-3,3], [-3,3], [-3,3])
 
         # Look approximately at the robot, but then randomize the orientation around that
-        cam_pos = np.array([-1.75, 0, 1.62])
+        # cam_pos = np.array([-1.75, 0, 1.62])
         target_id = self.model.body_name2id(FLAGS.look_at)
 
         cam_off = 0 #sample_xyz(L_R3D)
@@ -164,8 +171,7 @@ class SimManager(object):
         quat = jitter_angle(quat, ANG3)
         #quat = jitter_quat(quat, 0.01)
 
-        cam_pos += sample_xyz(C_R3D)
-
+        # cam_pos = np.array(sample_xyz(C_R3D))
         self.cam_modder.set_quat('camera1', quat)
         self.cam_modder.set_pos('camera1', cam_pos)
         self.cam_modder.set_fovy('camera1', 60)
@@ -217,10 +223,12 @@ class SimManager(object):
         self.model.geom_quat[robot_gid] = jitter_quat(self.START_GEOM_QUAT[robot_gid], 0.01)
 
     def _rand_object(self):
-        obj_gid = self.model.geom_name2id('object')
+        obj_gid = self.sim.model.geom_name2id('object')
+        obj_bid = self.sim.model.geom_name2id('object')
         table_gid = self.model.geom_name2id('object_table')
         table_bid = self.model.body_name2id('object_table')
 
+        obj_pose = self.start_obj_pose.copy()
         xval = self.model.geom_size[table_gid][0] #- self.model.geom_size[obj_gid][0]
         yval = self.model.geom_size[table_gid][1] #- self.model.geom_size[obj_gid][1]
 
@@ -228,9 +236,12 @@ class SimManager(object):
         O_Y = Range(-yval, yval)
         O_Z = Range(0, 0)
         O_R3D = Range3D(O_X, O_Y, O_Z)
-        self.model.geom_pos[obj_gid] = self.START_GEOM_POS[obj_gid] + sample_xyz(O_R3D)
-        self.model.geom_quat[obj_gid] = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
 
+        newpos = obj_pose[:3] + sample_xyz(O_R3D)
+        # newquat = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
+        obj_pose[:3] = newpos
+        # obj_pose[3:] = newquat
+        self.sim.data.set_joint_qpos('object:joint', obj_pose)
         #T_X = Range(-0.1, 0.1)
         #T_Y = Range(-0.1, 0.1)
         #T_Z = Range(-0.1, 0.1)

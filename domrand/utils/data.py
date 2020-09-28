@@ -78,10 +78,11 @@ def write_data(sim_manager, data_path):
             try:
                 for j in trange(int(INNER), desc='Examples generated'):
                     image, label = sim_manager.get_data()
+                    # import imageio
+                    # imageio.imwrite(f"{j}.png",image)
                     assert image.dtype == np.uint8
                     image_raw = image.tostring()
                     label_raw = label.astype(np.float32).tostring()
-
                     example = tf.train.Example(
                         features=tf.train.Features(
                             feature={
