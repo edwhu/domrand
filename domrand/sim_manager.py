@@ -72,8 +72,8 @@ class SimManager(object):
             #self.viewer.add_marker(pos=cam_pos, label="CAM: {}{}".format(cam_pos, ypr))
             #self.viewer.add_marker(pos=cam_pos, label="CAM: {}".format(ypr))
             #self.viewer.add_marker(pos=cam_pos, label="CAM: {}".format(cam_pos))
-            self.viewer.add_marker(pos=cam_pos, label="FOVY: {}, CAM: {}".format(cam_fovy, cam_pos))
-            self.viewer.render()
+            # self.viewer.add_marker(pos=cam_pos, label="FOVY: {}, CAM: {}".format(cam_fovy, cam_pos))
+            # self.viewer.render()
 
     # def _get_ground_truth(self):
     #     robot_gid = self.sim.model.geom_name2id('base_link')
@@ -155,7 +155,7 @@ class SimManager(object):
         ANG3 = Range3D([-3,3], [-3,3], [-3,3])
 
         # Look approximately at the robot, but then randomize the orientation around that
-        cam_pos = get_real_cam_pos(FLAGS.real_data_path)
+        cam_pos = np.array([-1.75, 0, 1.62])
         target_id = self.model.body_name2id(FLAGS.look_at)
 
         cam_off = 0 #sample_xyz(L_R3D)
