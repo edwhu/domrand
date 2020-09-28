@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import tqdm
 
 from domrand.define_flags import FLAGS
-from domrand.utils.models import XYZModel, BinnedModel
+from domrand.utils.models import XYZModel, BinnedModel, PoseModel
 from domrand.utils.general import notify
 from domrand.utils.data import load_eval_data, parse_record, brighten_image, bin_label
 from domrand.utils.image import make_pred_plot
@@ -44,15 +44,15 @@ def train_simple():
     pred_plot_ph = tf.placeholder(file_eval_imgs.dtype, PLOT_SHAPE)
     eval_dataset = tf.data.Dataset.from_tensor_slices((eval_img_ph, eval_label_ph))
     if FLAGS.output == 'binned':
-        eval_dataset = eval_dataset.map(bin_label, num_parallel_calls=ncpu) 
+        eval_dataset = eval_dataset.map(bin_label, num_parallel_calls=ncpu)
     eval_dataset = eval_dataset.batch(EVAL_BS)
 
     rand_files = lambda : np.random.choice(FLAGS.filenames, len(FLAGS.filenames), replace=False)
     filenames_ph = tf.placeholder(tf.string, shape=[None])
     train_dataset = tf.data.TFRecordDataset(filenames_ph, compression_type="GZIP")
-    train_dataset = train_dataset.map(parse_record, num_parallel_calls=ncpu) 
+    train_dataset = train_dataset.map(parse_record, num_parallel_calls=ncpu)
     if FLAGS.output == 'binned':
-        train_dataset = train_dataset.map(bin_label, num_parallel_calls=ncpu) 
+        train_dataset = train_dataset.map(bin_label, num_parallel_calls=ncpu)
     #train_dataset = train_dataset.shuffle(buffer_size=1000)
     train_dataset = train_dataset.batch(global_bs)
     train_dataset = train_dataset.map(brighten_image, num_parallel_calls=ncpu)
@@ -66,7 +66,13 @@ def train_simple():
     train_iter_op = iterator.make_initializer(train_dataset)
     eval_iter_op = iterator.make_initializer(eval_dataset)
 
-    Model = BinnedModel if FLAGS.output == 'binned' else XYZModel
+    if FLAGS.output == 'binned':
+        Model = BinnedModel
+    elif FLAGS.output == 'xyz':
+        Model = XYZModel
+    elif FLAGS.output == 'pose':
+        Model = PoseModel
+
     model = Model(d_image, d_label, global_step=global_step)
 
     inc_step = tf.assign_add(global_step, tf.constant(1, dtype=tf.int64))
@@ -103,7 +109,6 @@ def train_simple():
         step = sess.run(global_step) # just init it. it may get set to different value immediately
         epoch = sess.run(global_epoch)
 
-        
         early_stop_counter = 0 # counter to make sure we're still improving
         best_eval_euc = 99
         # TODO: convert this into a progress bar with finite run time, so I can see how long things take
@@ -119,7 +124,7 @@ def train_simple():
                     # Train
                     _, train_loss, train_euc, train_preds, labels, step = sess.run([model.minimize_op, model.loss, model.euc, model.preds, d_label, inc_step], feed_dict={model.lr_ph: lr})
                     if FLAGS.output == 'binned' and (np.count_nonzero(labels >= FLAGS.coarse_bin) or np.count_nonzero(labels < 0)):
-                        # this is bad. should not happen. 
+                        # this is bad. should not happen.
                         import ipdb; ipdb.set_trace()
                     losses.append(train_loss)
                     eucs.append(train_euc)
@@ -134,7 +139,7 @@ def train_simple():
                 train_images, train_preds, train_labels, summary = sess.run([d_rebuilt_image, model.preds, d_label, train_summaries], feed_dict={model.lr_ph: lr})
                 train_writer.add_summary(summary, global_step=epoch*len(FLAGS.filenames))
 
-                # Eval summary 
+                # Eval summary
                 sess.run(eval_iter_op, feed_dict={eval_img_ph: file_eval_imgs, eval_label_ph: file_eval_labels}) # swap to eval dataset
                 eval_loss, eval_euc, eval_images, eval_preds, eval_labels, eval_summary = sess.run([model.loss, model.euc, d_rebuilt_image, model.preds, d_label, train_summaries])
                 eval_writer.add_summary(eval_summary, global_step=epoch*len(FLAGS.filenames))
@@ -147,7 +152,7 @@ def train_simple():
                     best_eval_euc = eval_euc
 
                 if FLAGS.plot_preds:
-                    # takes about 2s 
+                    # takes about 2s
                     # EVAL VIZ
                     zipped = list(zip(eval_images, eval_preds, eval_labels))
                     #idxs = np.linspace(0,50,50).astype(int)
@@ -172,7 +177,7 @@ def train_simple():
                     sess.run([anneal_lr, anneal_bs])
 
                 # ready to move to next epoch
-                _, epoch = sess.run([train_iter_op, inc_epoch], {filenames_ph: rand_files()}) # reset so we can grab some summaries  
+                _, epoch = sess.run([train_iter_op, inc_epoch], {filenames_ph: rand_files()}) # reset so we can grab some summaries
 
                 savepath = os.path.join(FLAGS.checkpoint, 'ckpt')
 

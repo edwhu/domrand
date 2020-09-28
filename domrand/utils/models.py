@@ -52,12 +52,26 @@ class BinnedModel(Model):
 class XYZModel(Model):
     def __init__(self, inputs, labels, global_step):
         net_forward = lambda x: forward(x, 3, FLAGS.flag_values_dict())
-        self.dlabel_xyz = labels
+        self.label_xyz = labels
 
         with tf.variable_scope('model', reuse=False):
             self.pred_xyz = self.preds = net_forward(inputs)
 
         # loss for training
         self.loss = tf.losses.mean_squared_error(labels, self.preds)
+
+        super()._model_init(global_step)
+
+class PoseModel(Model):
+    def __init__(self, inputs, labels, global_step):
+        net_forward = lambda x: forward(x, 3, FLAGS.flag_values_dict())
+        self.dlabel_xyz = labels
+
+        with tf.variable_scope('model', reuse=False):
+            self.pred_xyz = self.preds = net_forward(inputs)
+
+        # loss for training
+        self.loss = tf.losses.absolute_difference(labels[:, :2], self.preds[:, :2])
+        self.loss += tf.losses.absolute_difference(1, tf.math.cos(labels[:, 2] - self.preds[:, 2]))
 
         super()._model_init(global_step)
