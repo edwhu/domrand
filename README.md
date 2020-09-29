@@ -1,10 +1,11 @@
 # Reproducing Domain Randomization for Sim-to-Real
 Reproducing [[Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World]](https://arxiv.org/abs/1703.06907)
 
-# Stuff Edward Added / Changed
+# Stuff Edward added for Active Vision CNN training
 - Added `active_perception.py` file that contains mujoco logic for generating sequences of images with static object and multiple viewpoints
 - Added `collect_sequence.py` file for generating the dataset.
 - Changed `utils/data.py` file for generating the dataset.
+- Add `model_eval()` function to `trainer.py` for evaluating active vision dataset
 
 The dataset has the following structure.
 
