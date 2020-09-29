@@ -30,10 +30,10 @@ def display_image(cam_img, real_img_path='./data/real/3-3.jpg', mode='preproc'):
     mng.resize(*mng.window.maxsize())
     #mng.window.state('zoomed') #works fine on Windows!
     plt.show()
-    
+
 def preproc_image(img, width=224, height=224, dtype=np.uint8):
     """Resize image to the given shape"""
-    # reference: https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py 
+    # reference: https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
     img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
     return img.astype(dtype)
 
@@ -44,10 +44,11 @@ TABLE_LINES = np.array([
     [TOX, TOX-TWX, TOY-TWY, TOY-TWY]
 ])[:,::-1]
 
-def _make_xyz_plot(image, pred, label):
+def _make_xyz_plot(image, pred, label, name=None):
     """
     Plot the image, and a visualization of the prediction compared to the ground truth when using XYZ coords
     """
+    # import ipdb;ipdb.set_trace()
     fig, (ax1, ax2) = plt.subplots(1,2)
 
     ax1.imshow(image, aspect='auto')
@@ -72,6 +73,8 @@ def _make_xyz_plot(image, pred, label):
 
     fig.canvas.draw()
     X = np.array(fig.canvas.renderer._renderer)
+    if name is not None:
+        plt.savefig(name)
     fig.clf()
     plt.close()
     return X[...,:3]
@@ -121,14 +124,14 @@ def _make_binned_plot(image, pred, sparse_label):
 
 
 
-def make_pred_plot(image, pred, label=None, mode=None):
+def make_pred_plot(image, pred, label=None, mode=None, name=None):
     """
     takes about 0.15s per image, so kinda expensive
     """
     np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)})
 
     if mode == 'xyz':
-        return _make_xyz_plot(image, pred, label)
+        return _make_xyz_plot(image, pred, label, name)
     elif mode == 'binned':
         return _make_binned_plot(image, pred, label)
     else:

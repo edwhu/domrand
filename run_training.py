@@ -3,7 +3,7 @@ import os
 import random
 import tensorflow as tf
 from domrand.define_flags import FLAGS
-from domrand.trainer import train_simple
+from domrand.trainer import train_simple, model_eval
 from domrand.utils.general import notify
 
 def main():
@@ -18,7 +18,9 @@ def main():
     if FLAGS.notify:
         notify('Finished run. train: {}'.format(results['train_euc']))
 
+def eval():
+    model_eval()
 
 if __name__ == '__main__':
-    main()
+    model_eval()
 

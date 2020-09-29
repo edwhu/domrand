@@ -55,6 +55,8 @@ class SimManager(object):
         self.tex_modder.whiten_materials()  # ensures materials won't impact colors
         self.cam_modder = CameraModder(self.sim)
         self.light_modder = LightModder(self.sim)
+        self.start_obj_pose = self.sim.data.get_joint_qpos('object:joint').copy()
+
 
     def get_data(self, num_images=10):
         """
@@ -130,7 +132,7 @@ class SimManager(object):
         # # robot_q.inv * obj_q = localrot
         # rel_quat = quaternion.as_float_array(robot_quat.inverse() * obj_quat)
         # pose = np.concatenate([obj_pos_in_robot_frame, rel_quat]).astype(np.float32)
-        obj_pose = np.concatenate([obj_world_pos, obj_world_quat]).astype(np.float32)
+        obj_pose = self.sim.data.get_joint_qpos('object:joint').copy()
         robot_pose = np.concatenate([robot_world_pos, robot_world_quat]).astype(np.float32)
         return obj_pose, robot_pose
 
@@ -303,10 +305,12 @@ class SimManager(object):
         self.model.geom_quat[robot_gid] = jitter_quat(self.START_GEOM_QUAT[robot_gid], 0.01)
 
     def _rand_object(self):
-        obj_gid = self.model.geom_name2id('object')
+        obj_gid = self.sim.model.geom_name2id('object')
+        obj_bid = self.sim.model.geom_name2id('object')
         table_gid = self.model.geom_name2id('object_table')
         table_bid = self.model.body_name2id('object_table')
 
+        obj_pose = self.start_obj_pose.copy()
         xval = self.model.geom_size[table_gid][0] #- self.model.geom_size[obj_gid][0]
         yval = self.model.geom_size[table_gid][1] #- self.model.geom_size[obj_gid][1]
 
@@ -314,8 +318,12 @@ class SimManager(object):
         O_Y = Range(-yval, yval)
         O_Z = Range(0, 0)
         O_R3D = Range3D(O_X, O_Y, O_Z)
-        self.model.geom_pos[obj_gid] = self.START_GEOM_POS[obj_gid] + sample_xyz(O_R3D)
-        self.model.geom_quat[obj_gid] = jitter_quat(self.START_GEOM_QUAT[obj_gid], 0.1)
+
+        newpos = obj_pose[:3] + sample_xyz(O_R3D)
+        newquat = jitter_quat(obj_pose[3:], 0.1)
+        obj_pose[:3] = newpos
+        obj_pose[3:] = newquat
+        self.sim.data.set_joint_qpos('object:joint', obj_pose)
 
         #T_X = Range(-0.1, 0.1)
         #T_Y = Range(-0.1, 0.1)

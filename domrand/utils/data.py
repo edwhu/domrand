@@ -2,6 +2,7 @@ import os
 import pickle
 import time
 
+import quaternion
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
@@ -186,31 +187,78 @@ def load_eval_data(eval_data_path, data_shape='asus'):
     """Read the data from the real world stored in jpgs"""
     imgs = []
     labels = []
+    pickle_path = os.path.join(eval_data_path, "ep_data.pkl")
+    with open(pickle_path, "rb") as f:
+        context = pickle.load(f)
     files = sorted(os.listdir(eval_data_path))
+    obj_world_pose = context["obj_world_pose"]
+    obj_world_pos = obj_world_pose[:3]
+    obj_world_quat = quaternion.as_quat_array(obj_world_pose[3:])
+    zrot = quaternion.as_rotation_vector(obj_world_quat)[-1]
+    pose = np.zeros((3,))
+    pose[:2] = obj_world_pos[:2]
+    pose[2] = zrot
     for f in files:
-        if not f.endswith('.jpg'):
+        if not f.endswith('.png'):
             continue
 
-        x, y = map(int, f[:-4].split('-')) # grab xy coords from x-y.jpg named file
-
-        dx = TABLE_GRID_OFFX - x*GRID_SPACING
-        dy = TABLE_GRID_OFFY - y*GRID_SPACING
-        dz = OBJ_DZ
-        dobj = np.array([dx, dy, dz])
-
+        labels.append(pose.copy())
         filename = os.path.join(eval_data_path, f)
         img = plt.imread(filename)
         if data_shape == 'asus':
             img = preproc_image(img, dtype=np.float32)
-        elif data_shape == 'kinect2':
-            img = preproc_image(img[:,240:-240,:], dtype=np.float32)
-
-        img = (img / 127.5) - 1.0
-        #plt.imshow(img); plt.show()
-
+        # plt.imshow(img); plt.show()
+        # img = (img / 127.5) - 1.0
         imgs.append(img)
-        labels.append(dobj)
-
     return np.array(imgs, dtype=np.float32), np.array(labels, dtype=np.float32)
+
+def load_all_eval_data(eval_data_path, data_shape='asus'):
+    """Read the data from the real world stored in jpgs"""
+    data = []
+    labels = []
+    for folder in os.scandir(eval_data_path):
+        if not folder.is_dir():
+            continue
+        print("reading folder", folder.name)
+        img, label = load_eval_data(folder.path)
+        data.append(img)
+        labels.append(label)
+
+    return np.concatenate(data), np.concatenate(labels)
+
+# def load_active_data(data_path, num_eps=5):
+#  """Read the data from the real world stored in jpgs"""
+#     imgs = []
+#     labels = []
+
+#     for episode in
+
+#     files = sorted(os.listdir(eval_data_path))
+#     for f in files:
+#         if not f.endswith('.png'):
+#             continue
+
+#         x, y = map(int, f[:-4].split('-')) # grab xy coords from x-y.jpg named file
+
+#         dx = TABLE_GRID_OFFX - x*GRID_SPACING
+#         dy = TABLE_GRID_OFFY - y*GRID_SPACING
+#         dz = OBJ_DZ
+#         dobj = np.array([dx, dy, dz])
+
+#         filename = os.path.join(eval_data_path, f)
+#         img = plt.imread(filename)
+#         if data_shape == 'asus':
+#             img = preproc_image(img, dtype=np.float32)
+#         elif data_shape == 'kinect2':
+#             img = preproc_image(img[:,240:-240,:], dtype=np.float32)
+
+#         img = (img / 127.5) - 1.0
+#         #plt.imshow(img); plt.show()
+
+#         imgs.append(img)
+#         labels.append(dobj)
+
+#     return np.array(imgs, dtype=np.float32), np.array(labels, dtype=np.float32)
+
 
 
