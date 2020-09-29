@@ -1,11 +1,14 @@
 # Reproducing Domain Randomization for Sim-to-Real
-Reproducing [[Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World]](https://arxiv.org/abs/1703.06907)
+This is a course project for [CIS 700 Data Driven Robotics](https://sites.google.com/view/penn-data-driven-robotics/home) where we aim to reproduce a paper and conduct additional experiments. The paper is [Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World](https://arxiv.org/abs/1703.06907).
+We have forked this codebase from [Matthew Wilson's excellent implementation](https://github.com/matwilso/domrand). Thanks, Matthew!
 
-# Stuff Edward added for Active Vision CNN training
+
+## Stuff Edward added for Active Vision CNN training
 - Added `active_perception.py` file that contains mujoco logic for generating sequences of images with static object and multiple viewpoints
 - Added `collect_sequence.py` file for generating the dataset.
 - Changed `utils/data.py` file for generating the dataset.
 - Add `model_eval()` function to `trainer.py` for evaluating active vision dataset
+- Updated MuJoCo-py to 2.0 logic
 
 The dataset has the following structure.
 
